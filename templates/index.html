@@ -14,14 +14,8 @@
         <header class="header">
             <div class="logo">
                 <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                    <circle cx="14" cy="14" r="13" stroke="url(#logoGrad)" stroke-width="2"/>
-                    <path d="M8 18L14 8L20 18" stroke="url(#logoGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <defs>
-                        <linearGradient id="logoGrad" x1="0" y1="0" x2="28" y2="28">
-                            <stop stop-color="#6C5CE7"/>
-                            <stop offset="1" stop-color="#00CEFF"/>
-                        </linearGradient>
-                    </defs>
+                    <circle cx="14" cy="14" r="13" stroke="#6C5CE7" stroke-width="2"/>
+                    <path d="M8 18L14 8L20 18" stroke="#6C5CE7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 <span>Speedtest</span>
             </div>
@@ -37,12 +31,6 @@
                 <div class="gauge-wrapper">
                     <svg viewBox="0 0 300 180" class="gauge" id="gauge">
                         <defs>
-                            <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stop-color="#00E676"/>
-                                <stop offset="40%" stop-color="#FFEA00"/>
-                                <stop offset="70%" stop-color="#FF9100"/>
-                                <stop offset="100%" stop-color="#FF1744"/>
-                            </linearGradient>
                             <filter id="glow">
                                 <feGaussianBlur stdDeviation="3" result="blur"/>
                                 <feMerge>
@@ -56,7 +44,7 @@
                         <g id="tickMarks" opacity="0.3"></g>
                         <path id="gaugeArc"
                               d="M 30 150 A 120 120 0 0 1 270 150"
-                              fill="none" stroke="url(#gaugeGrad)" stroke-width="14" stroke-linecap="round"
+                              fill="none" stroke="#6C5CE7" stroke-width="14" stroke-linecap="round"
                               stroke-dasharray="0 377" filter="url(#glow)"/>
                         <g id="needleGroup">
                             <line id="needle" x1="150" y1="150" x2="150" y2="50"

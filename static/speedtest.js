@@ -160,10 +160,7 @@
         });
         graphCtx.lineTo(cw, ch);
         graphCtx.closePath();
-        const grad = graphCtx.createLinearGradient(0, 0, 0, ch);
-        grad.addColorStop(0, 'rgba(108, 92, 231, 0.3)');
-        grad.addColorStop(1, 'rgba(108, 92, 231, 0.0)');
-        graphCtx.fillStyle = grad;
+        graphCtx.fillStyle = 'rgba(108, 92, 231, 0.25)';
         graphCtx.fill();
 
         graphCtx.beginPath();

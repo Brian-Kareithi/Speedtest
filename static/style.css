@@ -154,10 +154,7 @@ body {
     font-weight: 800;
     line-height: 1;
     letter-spacing: -2px;
-    background: linear-gradient(135deg, #fff 30%, rgba(255,255,255,0.6));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #fff;
 }
 
 .speed-unit {
@@ -198,7 +195,7 @@ body {
     padding: 14px 44px;
     border: 2px solid var(--accent);
     border-radius: 10px;
-    background: linear-gradient(135deg, rgba(108, 92, 231, 0.25), rgba(108, 92, 231, 0.08));
+    background: rgba(108, 92, 231, 0.25);
     color: #fff;
     font-family: inherit;
     font-size: 1rem;
@@ -210,7 +207,7 @@ body {
 }
 
 .start-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(108, 92, 231, 0.4), rgba(108, 92, 231, 0.15));
+    background: rgba(108, 92, 231, 0.4);
     box-shadow: 0 0 30px var(--accent-glow);
     transform: translateY(-2px);
 }
@@ -226,7 +223,7 @@ body {
 
 .start-btn.running {
     border-color: var(--orange);
-    background: linear-gradient(135deg, rgba(255, 145, 0, 0.25), rgba(255, 145, 0, 0.08));
+    background: rgba(255, 145, 0, 0.25);
 }
 
 /* Results */
