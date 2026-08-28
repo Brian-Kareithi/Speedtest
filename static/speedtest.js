@@ -191,8 +191,7 @@
         isRunning = true;
         startBtn.disabled = true;
         startBtn.classList.add('running');
-        startBtn.querySelector('.go-text').textContent = '...';
-        startBtn.querySelector('.go-sub').textContent = 'Testing';
+        startBtn.textContent = 'Testing...';
 
         let pingMs = 0, jitterMs = 0, lossPct = 0, dlMbps = 0, ulMbps = 0;
 
@@ -243,7 +242,12 @@
         setStatus('Measuring packet loss...', 'active');
         try {
             lossPct = await measurePacketLoss();
-            setCardValue(packetLossCard, packetLossValue, lossPct.toFixed(1), '%');
+            if (lossPct < 0) {
+                packetLossValue.textContent = 'n/a';
+                setStatus('Packet loss endpoint unavailable', 'done');
+            } else {
+                setCardValue(packetLossCard, packetLossValue, lossPct.toFixed(1), '%');
+            }
         } catch (e) {
             packetLossValue.textContent = 'Error';
         }
@@ -253,19 +257,30 @@
         setCard(downloadCard, 'active');
         setStatus('Testing download...', 'active');
         speedUnit.textContent = 'Mbps';
-        dlMbps = await measureDownload();
-        animateValue(speedValue, parseFloat(speedValue.textContent) || 0, dlMbps, 500);
-        setGauge(dlMbps);
-        setCardValue(downloadCard, downloadValue, dlMbps.toFixed(1), 'Mbps');
+        try {
+            dlMbps = await measureDownload();
+            animateValue(speedValue, parseFloat(speedValue.textContent) || 0, dlMbps, 500);
+            setGauge(dlMbps);
+            setCardValue(downloadCard, downloadValue, dlMbps.toFixed(1), 'Mbps');
+        } catch (e) {
+            downloadValue.textContent = 'Failed';
+            const stat = setStatus('Download failed - check server', 'done');
+            void stat;
+        }
         setCard(downloadCard, 'done');
 
         // --- UPLOAD (time-based) ---
         setCard(uploadCard, 'active');
         setStatus('Testing upload...', 'active');
-        ulMbps = await measureUpload();
-        animateValue(speedValue, parseFloat(speedValue.textContent) || 0, ulMbps, 500);
-        setGauge(ulMbps);
-        setCardValue(uploadCard, uploadValue, ulMbps.toFixed(1), 'Mbps');
+        try {
+            ulMbps = await measureUpload();
+            animateValue(speedValue, parseFloat(speedValue.textContent) || 0, ulMbps, 500);
+            setGauge(ulMbps);
+            setCardValue(uploadCard, uploadValue, ulMbps.toFixed(1), 'Mbps');
+        } catch (e) {
+            uploadValue.textContent = 'Failed';
+            setStatus('Upload failed - check server', 'done');
+        }
         setCard(uploadCard, 'done');
 
         // Done
@@ -274,15 +289,15 @@
         hideLiveGraph();
         startBtn.disabled = false;
         startBtn.classList.remove('running');
-        startBtn.querySelector('.go-text').textContent = 'GO';
-        startBtn.querySelector('.go-sub').textContent = 'Start Test';
+        startBtn.textContent = 'Start Test';
         isRunning = false;
 
         // Save history
+        const lossStr = lossPct < 0 ? 'n/a' : lossPct.toFixed(1);
         const entry = {
             ping: Math.round(pingMs),
             jitter: jitterMs.toFixed(1),
-            loss: lossPct.toFixed(1),
+            loss: lossStr,
             download: dlMbps.toFixed(1),
             upload: ulMbps.toFixed(1),
             date: new Date().toLocaleString()
@@ -294,146 +309,135 @@
     }
 
     // Packet loss: send N sequenced requests, count how many never respond.
-    // Each missing/errored request counts as a lost packet.
+    // Each missing/errored request counts as a lost packet. Over HTTP/TCP the
+    // network retransmits, so real loss is usually ~0% for a reachable server;
+    // a high value almost always means the endpoint/server is unreachable.
     async function measurePacketLoss() {
         const TOTAL = 30;
-        const TIMEOUT = 400;
-        const sent = new Set();
-        for (let i = 0; i < TOTAL; i++) sent.add(i);
-
+        const TIMEOUT = 500;
+        let okCount = 0;
+        let totalRequests = 0;
         const responses = new Set();
-        const tasks = Array.from({ length: TOTAL }, (_, i) =>
-            fetch(apiUrl('/api/packet-loss?seq=' + i), { signal: AbortSignal.timeout(TIMEOUT) })
+
+        const tasks = Array.from({ length: TOTAL }, (_, i) => {
+            totalRequests++;
+            return fetch(apiUrl('/api/packet-loss?seq=' + i), { signal: AbortSignal.timeout(TIMEOUT) })
                 .then(async (r) => {
+                    const text = await r.text();
                     if (r.ok) {
-                        const text = await r.text();
-                        responses.add(parseInt(text, 10));
+                        okCount++;
+                        responses.add(parseInt(text, 10) || i);
                     }
                 })
-                .catch(() => {})
-        );
+                .catch(() => {});
+        });
 
         await Promise.allSettled(tasks);
 
-        let lost = 0;
-        sent.forEach((seq) => { if (!responses.has(seq)) lost++; });
-
-        const received = Array.from(responses).sort((a, b) => a - b);
-        // Also count sequence gaps as lost (covers out-of-order collapses).
-        for (let i = 1; i < received.length; i++) {
-            const gap = received[i] - received[i - 1];
-            if (gap > 1) lost += (gap - 1);
+        // If the endpoint itself is broken/missing (e.g. an older server without
+        // /api/packet-loss), a near-100% "loss" is misleading. Signal n/a instead.
+        if (okCount === 0 && totalRequests === TOTAL) {
+            return -1; // endpoint unreachable -> caller shows "n/a"
         }
 
-        return (Math.min(lost, TOTAL) / TOTAL) * 100;
+        let lost = 0;
+        for (let i = 0; i < TOTAL; i++) {
+            if (!responses.has(i)) lost++;
+        }
+
+        return (lost / TOTAL) * 100;
     }
 
-    // Download: parallel streams read for TEST_DURATION seconds
+    // Download: parallel streams repeatedly download fixed-size files
+    // (uses arrayBuffer, not streaming reader, for max browser compatibility).
     async function measureDownload() {
-        let totalBytes = 0;
         const startTime = performance.now();
-        const sample = new Int32Array(60);
-        let sampleIdx = 0;
-
-        const controllers = [];
-        async function stream(i) {
-            const resp = await fetch(apiUrl('/api/download?nocache=' + Date.now() + '_' + i));
-            if (!resp.ok || !resp.body) throw new Error('bad response');
-            const reader = resp.body.getReader();
-            controllers.push(() => reader.cancel());
-            const chunk = new Uint8Array(256 * 1024);
-            let byteAcc = 0;
-            let byteAccTime = performance.now();
-            while ((performance.now() - startTime) < TEST_DURATION * 1000) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                if (value) {
-                    totalBytes += value.length;
-                    byteAcc += value.length;
-                    const now = performance.now();
-                    if (now - byteAccTime > 200) {
-                        const coord = startTime + (TEST_DURATION * 1000);
-                        void coord;
-                        const inst = (byteAcc * 8) / ((now - byteAccTime) * 1000);
-                        sample[sampleIdx % sample.length] = inst;
-                        sampleIdx++;
-                        byteAcc = 0;
-                        byteAccTime = now;
-                    }
-                }
-            }
-        }
+        let totalBytes = 0;
+        let failed = false;
+        const FILE_SIZE = 12 * 1024 * 1024; // 12MB per request
 
         const progressTimer = setInterval(() => {
             const elapsed = (performance.now() - startTime) / 1000;
-            const inst = (totalBytes * 8) / (elapsed * 1000000);
-            if (elapsed > 0.1) {
+            const inst = elapsed > 0.1 ? (totalBytes * 8) / (elapsed * 1000000) : 0;
+            if (inst > 0) {
                 pushGraphPoint(inst);
                 speedValue.textContent = inst < 10 ? inst.toFixed(1) : Math.round(inst);
                 setGauge(inst);
             }
         }, 100);
+
+        async function stream(i) {
+            try {
+                while ((performance.now() - startTime) < TEST_DURATION * 1000) {
+                    const url = apiUrl('/api/download?size=' + FILE_SIZE + '&nocache=' + Date.now() + '_' + i);
+                    const resp = await fetch(url);
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const buf = await resp.arrayBuffer();
+                    totalBytes += buf.byteLength;
+                }
+            } catch (e) {
+                failed = true;
+            }
+        }
 
         await Promise.allSettled(Array.from({ length: DOWNLOAD_STREAMS }, (_, i) => stream(i)));
         clearInterval(progressTimer);
-        controllers.forEach(cancel => { try { cancel(); } catch (e) {} });
 
         const elapsed = (performance.now() - startTime) / 1000;
-        return (totalBytes * 8) / (elapsed * 1000000);
+        if (elapsed < 0.001) return 0;
+        const mbps = (totalBytes * 8) / (elapsed * 1000000);
+        if (failed && totalBytes === 0) throw new Error('download failed');
+        return mbps;
     }
 
-    // Upload: parallel streams, send random data for TEST_DURATION seconds
+    // Upload: parallel streams repeatedly POST fixed-size blobs
+    // (uses Blob bodies, not ReadableStream, for max browser compatibility).
     async function measureUpload() {
-        let totalBytes = 0;
         const startTime = performance.now();
+        let totalBytes = 0;
+        let failed = false;
+        const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB per POST
 
-        async function stream(i) {
-            const fd = await fetch(apiUrl('/api/upload'), {
-                method: 'POST',
-                body: getUploadBody(i, startTime),
-                duplex: 'half'
-            });
-            if (fd.ok) {
-                const j = await fd.json();
-                if (j && j.received) totalBytes += j.received;
-            }
-        }
-
-        // Stream that generates data until the test duration elapses
-        function getUploadBody(streamId, startTimeRef) {
-            const encoder = new TextEncoder();
-            let running = true;
-            const rand = new Uint8Array(256 * 1024);
-            crypto.getRandomValues(rand);
-            return new ReadableStream({
-                pull(controller) {
-                    if (!running || (performance.now() - startTimeRef) >= TEST_DURATION * 1000) {
-                        running = false;
-                        controller.close();
-                        return;
-                    }
-                    crypto.getRandomValues(rand);
-                    controller.enqueue(rand.slice(0));
-                },
-                cancel() { running = false; }
-            });
-        }
+        const payload = new Uint8Array(CHUNK_SIZE);
+        crypto.getRandomValues(payload);
+        const blob = new Blob([payload], { type: 'application/octet-stream' });
 
         const progressTimer = setInterval(() => {
             const elapsed = (performance.now() - startTime) / 1000;
-            const inst = (totalBytes * 8) / (elapsed * 1000000);
-            if (elapsed > 0.1) {
+            const inst = elapsed > 0.1 ? (totalBytes * 8) / (elapsed * 1000000) : 0;
+            if (inst > 0) {
                 pushGraphPoint(inst);
                 speedValue.textContent = inst < 10 ? inst.toFixed(1) : Math.round(inst);
                 setGauge(inst);
             }
         }, 100);
+
+        async function stream(i) {
+            try {
+                while ((performance.now() - startTime) < TEST_DURATION * 1000) {
+                    const resp = await fetch(apiUrl('/api/upload?nocache=' + i), {
+                        method: 'POST',
+                        body: blob,
+                        headers: { 'Content-Type': 'application/octet-stream' }
+                    });
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const j = await resp.json();
+                    const got = (j && j.received) ? j.received : blob.size;
+                    totalBytes += got;
+                }
+            } catch (e) {
+                failed = true;
+            }
+        }
 
         await Promise.allSettled(Array.from({ length: UPLOAD_STREAMS }, (_, i) => stream(i)));
         clearInterval(progressTimer);
 
         const elapsed = (performance.now() - startTime) / 1000;
-        return (totalBytes * 8) / (elapsed * 1000000);
+        if (elapsed < 0.001) return 0;
+        const mbps = (totalBytes * 8) / (elapsed * 1000000);
+        if (failed && totalBytes === 0) throw new Error('upload failed');
+        return mbps;
     }
 
     // History
