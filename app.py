@@ -43,6 +43,14 @@ def ping():
     return Response('pong', status=200)
 
 
+@app.route('/api/packet-loss')
+def packet_loss():
+    # Echoes a sequence number so the client can detect lost/missing
+    # packets by counting gaps in the responses it receives.
+    seq = request.args.get('seq', '0')
+    return Response(seq, status=200, mimetype='text/plain')
+
+
 @app.route('/api/download')
 def download():
     # Streams data continuously until the client disconnects. The client

@@ -119,6 +119,16 @@
                     <div class="result-value" id="jitterValue">--</div>
                     <div class="result-sub">ms</div>
                 </div>
+                <div class="result-card" id="packetLossCard">
+                    <div class="result-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z"/><polyline points="3 7 12 12 21 7"/><line x1="12" y1="12" x2="12" y2="22"/>
+                        </svg>
+                    </div>
+                    <div class="result-label">Packet Loss</div>
+                    <div class="result-value" id="packetLossValue">--</div>
+                    <div class="result-sub">%</div>
+                </div>
             </div>
 
             <div class="live-speed" id="liveSpeed">
@@ -140,13 +150,14 @@
                                 <th>#</th>
                                 <th>Ping</th>
                                 <th>Jitter</th>
+                                <th>Loss</th>
                                 <th>Download</th>
                                 <th>Upload</th>
                                 <th>Date</th>
                             </tr>
                         </thead>
                         <tbody id="historyBody">
-                            <tr class="empty-row"><td colspan="6">No tests yet</td></tr>
+                            <tr class="empty-row"><td colspan="7">No tests yet</td></tr>
                         </tbody>
                     </table>
                 </div>

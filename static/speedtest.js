@@ -11,10 +11,12 @@
     const downloadValue = $('downloadValue');
     const uploadValue = $('uploadValue');
     const jitterValue = $('jitterValue');
+    const packetLossValue = $('packetLossValue');
     const pingCard = $('pingCard');
     const downloadCard = $('downloadCard');
     const uploadCard = $('uploadCard');
     const jitterCard = $('jitterCard');
+    const packetLossCard = $('packetLossCard');
     const historyBody = $('historyBody');
     const serverUrl = $('serverUrl');
     const serverStatus = $('serverStatus');
@@ -192,7 +194,7 @@
         startBtn.querySelector('.go-text').textContent = '...';
         startBtn.querySelector('.go-sub').textContent = 'Testing';
 
-        let pingMs = 0, jitterMs = 0, dlMbps = 0, ulMbps = 0;
+        let pingMs = 0, jitterMs = 0, lossPct = 0, dlMbps = 0, ulMbps = 0;
 
         // Reset
         setGauge(0);
@@ -202,6 +204,7 @@
         setCardValue(downloadCard, downloadValue, '--', 'Mbps');
         setCardValue(uploadCard, uploadValue, '--', 'Mbps');
         setCardValue(jitterCard, jitterValue, '--', 'ms');
+        setCardValue(packetLossCard, packetLossValue, '--', '%');
         showLiveGraph();
 
         // --- PING ---
@@ -234,6 +237,17 @@
         }
         setCard(pingCard, 'done');
         setCard(jitterCard, 'done');
+
+        // --- PACKET LOSS ---
+        setCard(packetLossCard, 'active');
+        setStatus('Measuring packet loss...', 'active');
+        try {
+            lossPct = await measurePacketLoss();
+            setCardValue(packetLossCard, packetLossValue, lossPct.toFixed(1), '%');
+        } catch (e) {
+            packetLossValue.textContent = 'Error';
+        }
+        setCard(packetLossCard, 'done');
 
         // --- DOWNLOAD (time-based) ---
         setCard(downloadCard, 'active');
@@ -268,6 +282,7 @@
         const entry = {
             ping: Math.round(pingMs),
             jitter: jitterMs.toFixed(1),
+            loss: lossPct.toFixed(1),
             download: dlMbps.toFixed(1),
             upload: ulMbps.toFixed(1),
             date: new Date().toLocaleString()
@@ -276,6 +291,41 @@
         if (history.length > 50) history.pop();
         localStorage.setItem('speedtestHistory', JSON.stringify(history));
         renderHistory();
+    }
+
+    // Packet loss: send N sequenced requests, count how many never respond.
+    // Each missing/errored request counts as a lost packet.
+    async function measurePacketLoss() {
+        const TOTAL = 30;
+        const TIMEOUT = 400;
+        const sent = new Set();
+        for (let i = 0; i < TOTAL; i++) sent.add(i);
+
+        const responses = new Set();
+        const tasks = Array.from({ length: TOTAL }, (_, i) =>
+            fetch(apiUrl('/api/packet-loss?seq=' + i), { signal: AbortSignal.timeout(TIMEOUT) })
+                .then(async (r) => {
+                    if (r.ok) {
+                        const text = await r.text();
+                        responses.add(parseInt(text, 10));
+                    }
+                })
+                .catch(() => {})
+        );
+
+        await Promise.allSettled(tasks);
+
+        let lost = 0;
+        sent.forEach((seq) => { if (!responses.has(seq)) lost++; });
+
+        const received = Array.from(responses).sort((a, b) => a - b);
+        // Also count sequence gaps as lost (covers out-of-order collapses).
+        for (let i = 1; i < received.length; i++) {
+            const gap = received[i] - received[i - 1];
+            if (gap > 1) lost += (gap - 1);
+        }
+
+        return (Math.min(lost, TOTAL) / TOTAL) * 100;
     }
 
     // Download: parallel streams read for TEST_DURATION seconds
@@ -390,7 +440,7 @@
     function renderHistory() {
         historyBody.innerHTML = '';
         if (history.length === 0) {
-            historyBody.innerHTML = '<tr class="empty-row"><td colspan="6">No tests yet</td></tr>';
+            historyBody.innerHTML = '<tr class="empty-row"><td colspan="7">No tests yet</td></tr>';
             return;
         }
         history.forEach((entry, i) => {
@@ -399,6 +449,7 @@
                 <td>${history.length - i}</td>
                 <td>${entry.ping} ms</td>
                 <td>${entry.jitter} ms</td>
+                <td>${entry.loss}%</td>
                 <td>${entry.download} Mbps</td>
                 <td>${entry.upload} Mbps</td>
                 <td>${entry.date}</td>
