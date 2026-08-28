@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speedtest</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="logo">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                    <circle cx="14" cy="14" r="13" stroke="url(#logoGrad)" stroke-width="2"/>
+                    <path d="M8 18L14 8L20 18" stroke="url(#logoGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <defs>
+                        <linearGradient id="logoGrad" x1="0" y1="0" x2="28" y2="28">
+                            <stop stop-color="#6C5CE7"/>
+                            <stop offset="1" stop-color="#00CEFF"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span>Speedtest</span>
+            </div>
+            <div class="server-config">
+                <label for="serverUrl" class="server-label">Server</label>
+                <input type="text" id="serverUrl" class="server-input" placeholder="e.g. dreezy0 or 192.168.1.50:5000" spellcheck="false">
+                <div class="server-status" id="serverStatus"></div>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="gauge-section">
+                <div class="gauge-wrapper">
+                    <svg viewBox="0 0 300 180" class="gauge" id="gauge">
+                        <defs>
+                            <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#00E676"/>
+                                <stop offset="40%" stop-color="#FFEA00"/>
+                                <stop offset="70%" stop-color="#FF9100"/>
+                                <stop offset="100%" stop-color="#FF1744"/>
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="3" result="blur"/>
+                                <feMerge>
+                                    <feMergeNode in="blur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <path d="M 30 150 A 120 120 0 0 1 270 150"
+                              fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="14" stroke-linecap="round"/>
+                        <g id="tickMarks" opacity="0.3"></g>
+                        <path id="gaugeArc"
+                              d="M 30 150 A 120 120 0 0 1 270 150"
+                              fill="none" stroke="url(#gaugeGrad)" stroke-width="14" stroke-linecap="round"
+                              stroke-dasharray="0 377" filter="url(#glow)"/>
+                        <g id="needleGroup">
+                            <line id="needle" x1="150" y1="150" x2="150" y2="50"
+                                  stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                            <circle cx="150" cy="150" r="7" fill="white"/>
+                            <circle cx="150" cy="150" r="3" fill="#0a0e1a"/>
+                        </g>
+                    </svg>
+                    <div class="speed-center">
+                        <div class="speed-value" id="speedValue">0</div>
+                        <div class="speed-unit" id="speedUnit">Mbps</div>
+                    </div>
+                </div>
+                <div class="test-status" id="testStatus">Press GO to start</div>
+            </div>
+
+            <button class="go-btn" id="startBtn">
+                <span class="go-text">GO</span>
+                <span class="go-sub">Start Test</span>
+            </button>
+
+            <div class="results">
+                <div class="result-card" id="pingCard">
+                    <div class="result-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <div class="result-label">Ping</div>
+                    <div class="result-value" id="pingValue">--</div>
+                    <div class="result-sub">ms</div>
+                </div>
+                <div class="result-card" id="downloadCard">
+                    <div class="result-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </div>
+                    <div class="result-label">Download</div>
+                    <div class="result-value" id="downloadValue">--</div>
+                    <div class="result-sub">Mbps</div>
+                </div>
+                <div class="result-card" id="uploadCard">
+                    <div class="result-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <div class="result-label">Upload</div>
+                    <div class="result-value" id="uploadValue">--</div>
+                    <div class="result-sub">Mbps</div>
+                </div>
+                <div class="result-card" id="jitterCard">
+                    <div class="result-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <div class="result-label">Jitter</div>
+                    <div class="result-value" id="jitterValue">--</div>
+                    <div class="result-sub">ms</div>
+                </div>
+            </div>
+
+            <div class="live-speed" id="liveSpeed">
+                <div class="live-label">Live Speed</div>
+                <div class="live-graph">
+                    <canvas id="speedGraph" width="600" height="80"></canvas>
+                </div>
+            </div>
+
+            <section class="history-section">
+                <div class="history-header">
+                    <h2>History</h2>
+                    <button class="clear-btn" id="clearHistory">Clear</button>
+                </div>
+                <div class="history-table-wrap">
+                    <table id="historyTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Ping</th>
+                                <th>Jitter</th>
+                                <th>Download</th>
+                                <th>Upload</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody">
+                            <tr class="empty-row"><td colspan="6">No tests yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <span>Speedtest &mdash; Self-hosted</span>
+        </footer>
+    </div>
+    <script src="/static/speedtest.js"></script>
+</body>
+</html>
